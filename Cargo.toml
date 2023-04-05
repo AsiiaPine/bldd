@@ -2,7 +2,14 @@
 name = "bldd"
 version = "0.1.0"
 edition = "2021"
-
+authors = ["Anastasiia Stepanova <asiiapien@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "Backward ldd command to list all libs used in binaries in a directory"
+readme = "README.md"
+homepage = "https://github.com/AsiiaPine/bldd"
+repository = "https://github.com/AsiiaPine/bldd"
+keywords = ["ldd", "search libraries", "demo"]
+categories = ["command-line-utilities"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

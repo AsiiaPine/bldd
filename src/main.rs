@@ -10,13 +10,12 @@ use std::process::Command;
 use std::str;
 use clap::Parser;
 
-/// Search for a pattern in a file and display the lines that contain it.
+
+/// Search for libraries in a directory ELF files and display all found dependencies on libraries in a directory.
 #[derive(Parser)]
 struct Cli {
-    /// The pattern to look for
-    pattern: String,
-    /// The path to the file to read
-    path: std::path::PathBuf,
+    // "The path to the directory to read"
+    path: Option<std::path::PathBuf>,
 }
 
 struct ElfCounter {
@@ -140,13 +139,15 @@ fn collect_lib<'a>(
 }
 
 fn main() {
-    let args = Cli::parse();
-    let content = std::fs::read_to_string(&args.path).expect("could not read file");
-
+    let args = Cli::from_args();
+    if args.path.is_none(){
+       return;
+    }
 
     let args: Vec<String> = env::args().collect();
-
     let dir = &args[1];
+
+    // let dir = &Cli::path;
     let mut lib_map: HashMap<String, ElfCounter> = HashMap::new();
     let names = scan_dir(&dir);
     collect_lib(&names, &dir, &mut lib_map);
