@@ -184,18 +184,7 @@ fn collect_lib<'a>(
 
 fn main() {
     let args = Cli::parse();
-    // if args.path.is_none() {
-    //     return;
-    // }
-    
-    // let args: Vec<String> = env::args().collect();
-    // let dir = args.path.as_ref().unwrap();
     let dir = args.path;
-    // match str::from_utf8(&output.stdout) {
-    //     Ok(v) => v,
-    //     Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-    // };
-    print!("recursive: {}", args.recursive);
 
     let mut collector: Vec<CollectorEntry> = Vec::new();
     let names = scan_dir(&dir);

@@ -1,22 +1,63 @@
 Backward ldd
 =======
 
-How does it work
-_______
 
-All ELF files contains data about the libraries used by the program, therefore such as ***ldd*** bash commands exists, which parse an ELF dynamic table to find dependencies.  
-The bldd works with directories and collect the **ldd** command output to make a **HashMap** of all lib names and files used a lib.
+All ELF files contain data about libraries used by the program, therefore such as ***ldd***, ***readelf*** etc. bash commands exist, which parse an ELF dynamic table to find used shared libraries.  
+The bldd works with directories and collects the **readelf** command output to make a **list** of all lib names and files used a lib and the machine architecture from an ELF file header.
 
 _____
-The ouput looks like that:
-````
+![help output](pictures_for_markdown/help_output.png "bldd held output ")
+____
+
+Usage example:
+---
+Input:
+
+
 ```
-Lib name        libdl.so.2 => /usr/lib/libdl.so.2 (0x00007f3bc7a34000)
-______________________________n_exec(1)
-x86_64__________ 
-elf-Linux-x64-bash
+./bldd .
 ```
+Output:
 ````
 
+
+
+---------- x86_64 ----------
+  libgcc_s.so.1 (1 executables) ->
+    ./bldd
+
+  libc.so.6 (1 executables) ->
+    ./bldd
+
+  ld-linux-x86-64.so.2 (1 executables) ->
+    ./bldd
+
+````
+Input:
+```
+./bldd -r .
+```
+
+Output:
+
+```
+---------- x86_64 ----------
+  libgcc_s.so.1 (34 executables) ->
+    ./bldd
+    ./build/num-traits-cfc12ef6a2206e39/buildk-script-build
+    ./build/num-traits-cfc12ef6a2206e39/build_script_build-cfc12ef6a2206e39
+    ./build/libc-61aecf2398dbde23/build_script_build-61aecf2398dbde23
+    ./build/libc-61aecf2398dbde23/build-script-build
+    ./build/proc-macro-error-attr-8dda783b6edd3f20/build-script-build
+    .......
+  libc.so.6 (34 executables) ->
+    ./bldd
+    ./build/num-traits-cfc12ef6a2206e39/build-script-build
+    ./build/num-traits-cfc12ef6a2206e39/build_script_build-cfc12ef6a2206e39
+    ./build/libc-61aecf2398dbde23/build_script_build-61aecf2398dbde23
+    ./build/libc-61aecf2398dbde23/build-script-build
+    ./build/proc-macro-error-attr-8dda783b6edd3f20/build-script-build
+    .......
+```
 
 
