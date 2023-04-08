@@ -14,7 +14,7 @@ use std::str;
 
 /// Search for libraries in a directory ELF files and display all found dependencies on libraries in a directory.
 #[derive(Parser)]
-#[clap(author="Anastasiia Stepanova <asiiapien@gmail.com>", version, about="Search for libraries in a directory ELF files and display all found dependencies on libraries in a directory.")]
+#[clap(author="Anastasiia Stepanova <asiiapine@gmail.com>", version, about="Search for libraries in a directory ELF files and display all found dependencies on libraries in a directory.")]
 struct Cli {
     /// The path to the directory to read
     path: String,
