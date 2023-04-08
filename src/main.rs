@@ -1,5 +1,6 @@
+use clap::Parser;
 use elf_rs::*;
-use std::collections::HashMap;
+use regex::Regex;
 use std::env;
 use std::fs;
 use std::fs::metadata;
@@ -8,21 +9,79 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::process::Command;
 use std::str;
-use clap::Parser;
+
 
 
 /// Search for libraries in a directory ELF files and display all found dependencies on libraries in a directory.
 #[derive(Parser)]
+#[clap(author="Anastasiia Stepanova <asiiapien@gmail.com>", version, about="Search for libraries in a directory ELF files and display all found dependencies on libraries in a directory.")]
 struct Cli {
-    // "The path to the directory to read"
-    path: Option<std::path::PathBuf>,
+    /// The path to the directory to read
+    path: String,
+
+    /// Recursive traversal of directory
+    #[arg(
+        short, long)]
+    recursive: bool,
 }
 
-struct ElfCounter {
-    arc_files: HashMap<String, Vec<String>>,
-    n_files: u32,
+#[derive(Debug, Clone)]
+struct CollectorEntry {
+    file_path: String,
+    lib_name: String,
+    machine_arc: ElfMachine,
 }
 
+/// Groups items in a vector by applying a lambda to each item to determine its
+/// group key. Returns a vector of tuples where the first element is the group
+/// key and the second element is a vector of all items in that group.
+///
+/// # Examples
+///
+/// ```
+/// let numbers = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+/// let groups = group_by(numbers, |n| n % 3);
+/// assert_eq!(groups, [(1, [1, 4, 7, 10]), (2, [2, 5, 8]), (0, [3, 6, 9])]);
+/// ```
+///
+/// # Arguments
+///
+/// * `vec`: A vector of items to group.
+///
+/// * `f`: A closure that accepts a reference to an item in the vector and returns
+///        a key to group the item by.
+///
+/// # Returns
+///
+/// A vector of tuples where the first element is the group key and the second
+/// element is a vector of all items in that group.
+fn group_by<T, K, F>(items: Vec<T>, key_func: F) -> Vec<(K, Vec<T>)>
+where
+    T: Clone,
+    F: Fn(&T) -> K,
+    K: Eq,
+{
+    let mut result: Vec<(K, Vec<T>)> = Vec::new();
+
+    for item in items {
+        let key = key_func(&item);
+        let mut found = false;
+
+        for group in result.iter_mut() {
+            if group.0 == key {
+                group.1.push(item.clone());
+                found = true;
+                break;
+            }
+        }
+
+        if !found {
+            result.push((key, vec![item.clone()]));
+        }
+    }
+
+    result
+}
 
 fn get_architecture(file_name: &String, directory: &String) -> ElfMachine {
     let md = metadata(directory).unwrap();
@@ -74,10 +133,17 @@ fn scan_dir(directory: &String) -> Vec<String> {
 fn collect_lib<'a>(
     names: &Vec<String>,
     directory: &String,
-    lib_map: &'a mut HashMap<String, ElfCounter>,
+    collector: &'a mut Vec<CollectorEntry>,
+    recursive: &bool
 ) {
     for file in names.iter() {
-        let output = Command::new("ldd")
+        let mut path = String::new();
+        path.push_str(directory);
+        path.push_str("/");
+        path.push_str(file);
+
+        let output = Command::new("readelf")
+            .arg("-d")
             .arg(&file)
             .current_dir(&directory)
             .output()
@@ -87,83 +153,65 @@ fn collect_lib<'a>(
             Ok(v) => v,
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
         };
-
+        // Get architecture of the file
         let architecture = get_architecture(&file, &directory);
         if architecture == ElfMachine::MachineUnknown(0) {
             continue;
         }
-        if architecture == ElfMachine::MachineUnknown(1) {
-            let mut path = String::new();
-            path.push_str(directory);
-            path.push_str("/");
-            path.push_str(file);
-
+        if architecture == ElfMachine::MachineUnknown(1) && recursive.clone(){
             let names = scan_dir(&path);
-            collect_lib(&names, &path, lib_map);
+            collect_lib(&names, &path, collector, recursive);
             continue;
         }
+        // Extraction of lib from readelf output line
+        let re = Regex::new(r"\[([^\]]+)\]").unwrap();
+        for lib in s.split('\n').filter(|x| x.contains("Shared library:")) {
+            // If the lib extraction passed successfully:
+            if let Some(captures) = re.captures(lib) {
+                let library = captures.get(1).unwrap().as_str();
 
-        let key = format!("{architecture:?}");
-
-        for lib in s.split('\n') {
-            match &mut lib_map.get_mut(&lib.to_string()) {
-                Some(entry) => match entry.arc_files.get_mut(&key) {
-                    Some(arc_map) => {
-                        arc_map.push(file.to_string());
-                        entry.n_files = entry.n_files + 1;
-                    }
-                    None => {
-                        let mut list_file_names: Vec<String> = Vec::new();
-                        list_file_names.push(file.to_string());
-                        let mut arc_files: HashMap<String, Vec<String>> = HashMap::new();
-                        arc_files.insert(key.clone(), list_file_names);
-                    }
-                },
-                None => {
-                    if lib ==""{
-                        continue;
-                    }
-                    let mut list_file_names: Vec<String> = Vec::new();
-                    list_file_names.push(file.to_string());
-                    let mut arc_files: HashMap<String, Vec<String>> = HashMap::new();
-                    arc_files.insert(key.clone(), list_file_names);
-                    let elf_counter = ElfCounter {
-                        arc_files: arc_files,
-                        n_files: 1,
-                    };
-                    lib_map.insert(lib.to_string(), elf_counter);
-                }
+                let result = CollectorEntry {
+                    lib_name: library.to_string(),
+                    file_path: path.clone(),
+                    machine_arc: architecture,
+                };
+                collector.push(result);
             }
         }
     }
 }
 
+
 fn main() {
-    let args = Cli::from_args();
-    if args.path.is_none(){
-       return;
-    }
+    let args = Cli::parse();
+    // if args.path.is_none() {
+    //     return;
+    // }
+    
+    // let args: Vec<String> = env::args().collect();
+    // let dir = args.path.as_ref().unwrap();
+    let dir = args.path;
+    // match str::from_utf8(&output.stdout) {
+    //     Ok(v) => v,
+    //     Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+    // };
+    print!("recursive: {}", args.recursive);
 
-    let args: Vec<String> = env::args().collect();
-    let dir = &args[1];
-
-    // let dir = &Cli::path;
-    let mut lib_map: HashMap<String, ElfCounter> = HashMap::new();
+    let mut collector: Vec<CollectorEntry> = Vec::new();
     let names = scan_dir(&dir);
-    collect_lib(&names, &dir, &mut lib_map);
+    collect_lib(&names, &dir, &mut collector, &args.recursive);
 
-    let mut vec: Vec<_> = lib_map.iter().collect();
-    vec.sort_by(|(_k, v), (_k2, v2)| v2.n_files.cmp(&v.n_files));
-
-
-    for (lib, elf_counter) in vec {
-        println!("Lib name {}", lib);
-        println!("{:_<1$}n_exec({2})", "", 30, elf_counter.n_files);
-        for (arc, file_container) in &elf_counter.arc_files {
-            println!("{2}{:_<1$} ", "", 10, arc);
-            for file in file_container {
-                println!("{}\n\n", file);
+    let vec = group_by(collector, |a: &CollectorEntry| a.machine_arc);
+    for (machine_type, entries) in vec {
+        println!("\n\n---------- {:?} ----------", machine_type);
+        let mut vec2 = group_by(entries, |x| x.lib_name.clone());
+        vec2.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+        for (lib_name, entries2) in vec2 {
+            println!("  {} ({} executables) ->", lib_name, entries2.len());
+            for entry in entries2 {
+                println!("    {}", entry.file_path);
             }
+            println!();
         }
     }
 }
